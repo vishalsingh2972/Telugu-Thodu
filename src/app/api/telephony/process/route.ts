@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { redis } from '@/lib/redis';
 import { generateMedicalReport } from '@/lib/evaluator';
+import { sendNriWhatsAppAlert } from '@/lib/whatsapp';
 
 export async function POST(request: Request) {
   try {
@@ -30,7 +31,6 @@ export async function POST(request: Request) {
 
     try {
       // 3. Download the raw audio recording from Twilio's cloud storage safely.
-      // We explicitly pass Basic Authentication headers so Twilio releases the secured file binary.
       const twilioAuthHeader = Buffer.from(
         `${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`
       ).toString('base64');
@@ -83,7 +83,7 @@ export async function POST(request: Request) {
       transcriptText = "[Error processing audio transcription asset]";
     }
 
-    // 5. Update call config status AND trigger Gemini Medical Analysis Engine
+    // 5. Update call config status, trigger Gemini Medical Analysis Engine, and send WhatsApp Alert
     if (cachedData) {
       const config = typeof cachedData === 'string' ? JSON.parse(cachedData) : cachedData;
       
@@ -107,6 +107,21 @@ export async function POST(request: Request) {
       // Save the structured medical report into Redis under a dedicated report key
       await redis.set(`call:${callSid}:report`, JSON.stringify(wellnessReport), { ex: 86400 });
       console.log(`[Database Success] Structured clinical wellness report successfully written to call:${callSid}:report`);
+
+      // --- NEW WHATSAPP DISPATCH GATEWAY ---
+      // Look for the targeted destination number saved during trigger configuration setup
+      // Falling back safely to your test number configuration if undefined
+      const nriRecipient = config.nriPhoneNumber || config.phoneNumber || "+916303366896";
+
+      console.log(`Routing analysis to WhatsApp distribution layer for recipient: ${nriRecipient}`);
+      
+      // Fire the asynchronous conditional notifier 
+      await sendNriWhatsAppAlert(
+        nriRecipient,
+        wellnessReport.overallMood, 
+        wellnessReport.aiNarrativeSummary
+      );
+      // -------------------------------------
     }
 
     // 6. Build the final TwiML instructions to gracefully conclude the call session

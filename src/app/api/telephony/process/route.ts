@@ -28,9 +28,20 @@ export async function POST(request: Request) {
     let detectedLanguage = "unknown";
 
     try {
-      // 3. Download the raw audio recording from Twilio's cloud storage (.wav format)
-      // Twilio gives us a URL without an extension, but appending .wav speeds up processing
-      const audioResponse = await fetch(`${recordingUrl}.wav`);
+      // 3. Download the raw audio recording from Twilio's cloud storage safely.
+      // We explicitly pass Basic Authentication headers so Twilio releases the secured file binary.
+      const twilioAuthHeader = Buffer.from(
+        `${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`
+      ).toString('base64');
+
+      console.log("Downloading authenticated voice payload from Twilio Edge servers...");
+      
+      const audioResponse = await fetch(`${recordingUrl}.wav`, {
+        headers: {
+          'Authorization': `Basic ${twilioAuthHeader}`
+        }
+      });
+
       if (!audioResponse.ok) {
         throw new Error(`Failed to download audio from Twilio payload. Status: ${audioResponse.status}`);
       }

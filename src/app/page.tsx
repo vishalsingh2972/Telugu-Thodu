@@ -425,13 +425,10 @@ export default function DashboardPage() {
                 <option value="DATE_ASC">Date: Oldest First</option>
                 {dynamicMoodsList.map((mood) => (
                   <option key={mood} value={mood}>
-                    {mood === "CONCERNED" ? "🚨 " : "• "} Mood: {mood} Only
+                    {mood === "CONCERNED" ? "🚨 " : "🟢 "} Mood: {mood} Only
                   </option>
                 ))}
               </select>
-              <span className="bg-slate-200/70 text-slate-700 text-xs font-bold px-2.5 py-1 rounded-full whitespace-nowrap">
-                {processedCalls.length} Nodes Filtered
-              </span>
             </div>
           </div>
 

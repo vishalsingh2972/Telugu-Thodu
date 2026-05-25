@@ -1,0 +1,1 @@
+// once app is deployed add cron here so that call goes to amma in hyderabad daily at a specific time without fail.

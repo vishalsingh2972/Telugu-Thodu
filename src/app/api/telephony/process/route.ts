@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { redis } from '@/lib/redis';
+import { generateMedicalReport } from '@/lib/evaluator';
 
 export async function POST(request: Request) {
   try {
@@ -49,14 +50,10 @@ export async function POST(request: Request) {
 
       // 4. Packaging the payload as multipart/form-data for Sarvam AI REST Specifications
       const sarvamPayload = new FormData();
-      // Convert the blob into a structural file format Sarvam can read natively
       const audioFile = new File([audioBlob], "recording.wav", { type: "audio/wav" });
       
       sarvamPayload.append('file', audioFile);
       sarvamPayload.append('model', 'saaras:v3');
-      
-      // Using 'translate' automatically detects Indian languages (Telugu/Hindi) 
-      // and converts them directly to English text for our upcoming LLM summary engine!
       sarvamPayload.append('mode', 'translate'); 
 
       console.log("Dispatching audio binary packet to Sarvam AI Core Engines...");
@@ -86,18 +83,30 @@ export async function POST(request: Request) {
       transcriptText = "[Error processing audio transcription asset]";
     }
 
-    // 5. Update state parameters atomically in Upstash Redis
+    // 5. Update call config status AND trigger Gemini Medical Analysis Engine
     if (cachedData) {
       const config = typeof cachedData === 'string' ? JSON.parse(cachedData) : cachedData;
       
-      // Attach the dynamic response attributes cleanly back onto the tracking token
+      // Update the basic call tracker configurations
       config.status = 'COMPLETED';
       config.userResponseTranscript = transcriptText;
       config.userLanguageDetected = detectedLanguage;
       config.completedAt = new Date().toISOString();
 
+      // Save the updated configuration map back to Redis
       await redis.set(`call:${callSid}:config`, JSON.stringify(config), { ex: 86400 });
       console.log(`Database transaction locked. State successfully updated to COMPLETED for call:${callSid}`);
+
+      // Extract the original question asked (fall back to a placeholder if missing)
+      const originalQuestion = config.questions?.[0] || "General health inquiry";
+
+      console.log("Passing context data to Gemini Evaluation Pipeline...");
+      // Trigger Gemini to analyze the context using your strict schemas
+      const wellnessReport = await generateMedicalReport(callSid, originalQuestion, transcriptText);
+
+      // Save the structured medical report into Redis under a dedicated report key
+      await redis.set(`call:${callSid}:report`, JSON.stringify(wellnessReport), { ex: 86400 });
+      console.log(`[Database Success] Structured clinical wellness report successfully written to call:${callSid}:report`);
     }
 
     // 6. Build the final TwiML instructions to gracefully conclude the call session
@@ -117,7 +126,7 @@ export async function POST(request: Request) {
     });
 
   } catch (error: any) {
-    console.error("Critical Failure in Day 4 Audio Processing Pipeline Route:", error);
+    console.error("Critical Failure in Audio Processing Pipeline Route:", error);
     return new NextResponse(
       `<?xml version="1.0" encoding="UTF-8"?><Response><Say>System exception cleared.</Say><Hangup/></Response>`,
       { headers: { 'Content-Type': 'application/xml' } }

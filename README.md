@@ -259,15 +259,3 @@ The goal is simple:
 > Use localized AI voice infrastructure to help Telugu families stay emotionally connected across continents.
 
 ---
-
-# 🧑‍💻 Built With
-
-- Next.js 15
-- TypeScript
-- Twilio Voice
-- Sarvam AI
-- Gemini 2.5 Flash
-- Zod
-- Upstash Redis
-- Tailwind CSS
-- shadcn/ui
